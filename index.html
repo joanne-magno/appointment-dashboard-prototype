@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appointment Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for Inter font and rounded corners */
+        body {
+            font-family: "Inter", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        .card {
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+        }
+        .chart-container {
+            width: 100%;
+            height: 300px; /* Fixed height for charts */
+            margin-bottom: 1rem;
+        }
+        .chart-svg {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <!-- D3.js CDN for charting -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body class="p-4 sm:p-6 md:p-8 lg:p-10 bg-gray-100 min-h-screen">
+
+    <div class="max-w-7xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-6 text-center">Appointment Dashboard</h1>
+
+        <!-- Filters Section -->
+        <div class="mb-8 p-4 bg-blue-50 rounded-xl shadow-inner grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label for="statusFilter" class="block text-sm font-medium text-gray-700 mb-1">Appointment Status</label>
+                <select id="statusFilter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="">All Statuses</option>
+                </select>
+            </div>
+            <div>
+                <label for="assignedToFilter" class="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                <select id="assignedToFilter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="">All Assignees</option>
+                </select>
+            </div>
+            <div>
+                <label for="typeFilter" class="block text-sm font-medium text-gray-700 mb-1">Appointment Type</label>
+                <select id="typeFilter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="">All Types</option>
+                    <option value="In Person">In Person</option>
+                    <option value="Phone">Phone</option>
+                </select>
+            </div>
+            <div>
+                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input type="date" id="startDate" class="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+            </div>
+            <div>
+                <label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input type="date" id="endDate" class="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+            </div>
+            <div class="sm:col-span-2 lg:col-span-1 flex items-end">
+                <button id="resetFilters" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                    Reset Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary Cards Section -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="card bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 flex flex-col items-center justify-center">
+                <p class="text-sm font-semibold opacity-80">Total Appointments</p>
+                <p id="totalAppointments" class="text-4xl font-bold mt-2">0</p>
+            </div>
+            <div class="card bg-gradient-to-r from-green-500 to-green-600 text-white p-6 flex flex-col items-center justify-center">
+                <p class="text-sm font-semibold opacity-80">Attended</p>
+                <p id="attendedAppointments" class="text-4xl font-bold mt-2">0</p>
+            </div>
+            <div class="card bg-gradient-to-r from-yellow-500 to-yellow-600 text-white p-6 flex flex-col items-center justify-center">
+                <p class="text-sm font-semibold opacity-80">New Appointments</p>
+                <p id="newAppointments" class="text-4xl font-bold mt-2">0</p>
+            </div>
+            <div class="card bg-gradient-to-r from-red-500 to-red-600 text-white p-6 flex flex-col items-center justify-center">
+                <p class="text-sm font-semibold opacity-80">Cancelled/No Show</p>
+                <p id="missedAppointments" class="text-4xl font-bold mt-2">0</p>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="card p-4 bg-white">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">Appointments by Status</h3>
+                <div id="appointmentsByStatusChart" class="chart-container"></div>
+            </div>
+            <div class="card p-4 bg-white">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">Appointments by Type</h3>
+                <div id="appointmentsByTypeChart" class="chart-container"></div>
+            </div>
+            <div class="card p-4 bg-white lg:col-span-2">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">Appointments by Assignee</h3>
+                <div id="appointmentsByAssigneeChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Appointments Table Section -->
+        <div class="card p-4 bg-white overflow-x-auto">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">All Appointments</h3>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unique ID</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seller Lead Name</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    </tr>
+                </thead>
+                <tbody id="appointmentsTableBody" class="bg-white divide-y divide-gray-200">
+                    <!-- Table rows will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        // Sample CSV data based on the PSS Reports - 2023-2025-Appointments.csv file
+        // In a real application, this would be fetched from a backend or directly from a file system.
+        const csvData = `Unique ID,Seller Lead Name,Appointment Location,Appointment Assigned To,Appointment Date/Time,Appointment Status,In Person Appt,Phone Appt,Appointment Attended,Duplicate check,Unnamed: 10,DATE AND TIME (date it entered to the QL),Date Range,Unnamed: 13,Week ending (LVL 10),Total Number of Leads,In Person Appt Count,In Person Appt Ratio,Phone Appt Count,Phone Appt Ratio,Appointment Type
+AppID4796,Brad Roby,4326 S Adams Ave South Ogden UT 84403,Jacob Atwater,2023-01-05 10:30,New Appointment,,,,No,1,,,,,,,,,,
+AppID4795,Dave Ruprecht,7546 S 2160 E Cottonwood Heights UT 84121,Matt Oviatt,2023-01-05 11:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4792,Kevin Holsten,8516 W 3500 S Magna UT 84044,Jacob Atwater,2023-01-05 13:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4793,Cindy Glad,3205 S 1530 E Salt Lake City UT 84106,Jacob Atwater,2023-01-05 14:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4789,Karoll Gutierrez,3116 W 1150 N West Point UT 84015,Jacob Atwater,2023-01-06 12:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4788,John Doe,123 Main St Anytown CA,Sarah Johnson,2023-01-06 14:00,Attended,,,,Yes,1,,,,,,,,,,In Person
+AppID4787,Jane Smith,456 Oak Ave Somewhere TX,Michael Brown,2023-01-07 09:00,Rescheduled,,,,No,1,,,,,,,,,,Phone
+AppID4786,Peter Jones,789 Pine Ln Nowhere FL,Sarah Johnson,2023-01-07 11:00,Cancelled,,,,No,1,,,,,,,,,,In Person
+AppID4785,Alice White,101 Elm St Anycity NY,Jacob Atwater,2023-01-08 10:00,Attended,,,,Yes,1,,,,,,,,,,Phone
+AppID4784,Bob Green,202 Maple Ave Otherville IL,Michael Brown,2023-01-08 15:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4783,Charlie Black,303 Birch Rd Smalltown GA,Sarah Johnson,2023-01-09 09:30,Attended,,,,Yes,1,,,,,,,,,,In Person
+AppID4782,Diana Grey,404 Cedar Dr Bigcity WA,Jacob Atwater,2023-01-09 11:30,No Show,,,,No,1,,,,,,,,,,Phone
+AppID4781,Eve Blue,505 Spruce St Littletown AZ,Michael Brown,2023-01-10 13:00,Attended,,,,Yes,1,,,,,,,,,,In Person
+AppID4780,Frank Red,606 Willow Ave Ourtown CO,Sarah Johnson,2023-01-10 16:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4779,Grace Kelly,707 River Rd Lakeside NV,Jacob Atwater,2023-01-11 09:00,Attended,,,,Yes,1,,,,,,,,,,In Person
+AppID4778,Henry Ford,808 Hilltop Dr Mountainville UT,Michael Brown,2023-01-11 10:30,Rescheduled,,,,No,1,,,,,,,,,,Phone
+AppID4777,Ivy Lane,909 Valley View Cir Forest City OR,Sarah Johnson,2023-01-12 14:00,Cancelled,,,,No,1,,,,,,,,,,In Person
+AppID4776,Jack Black,111 Ocean Blvd Seaville FL,Jacob Atwater,2023-01-12 16:00,New Appointment,,,,No,1,,,,,,,,,,
+AppID4775,Karen Stone,222 Desert Way Sandtown AZ,Michael Brown,2023-01-13 09:00,Attended,,,,Yes,1,,,,,,,,,,Phone
+AppID4774,Liam Neeson,333 Forest Trail Woodsville NC,Sarah Johnson,2023-01-13 11:00,No Show,,,,No,1,,,,,,,,,,In Person
+`;
+
+        let appointmentsData = []; // Stores the parsed data
+        let filteredAppointments = []; // Stores data after filters are applied
+
+        /**
+         * Parses a CSV string into an array of objects.
+         * @param {string} csvString The CSV data as a string.
+         * @returns {Array<Object>} An array of objects, where each object represents a row.
+         */
+        function parseCSV(csvString) {
+            const lines = csvString.trim().split('\n');
+            const headers = lines[0].split(',').map(header => header.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(value => value.trim());
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index];
+                });
+                data.push(row);
+            }
+            return data;
+        }
+
+        /**
+         * Renders/updates the dashboard elements (summary cards, charts, table).
+         * @param {Array<Object>} data The data to display.
+         */
+        function renderDashboard(data) {
+            // Update Summary Cards
+            document.getElementById('totalAppointments').textContent = data.length;
+            document.getElementById('attendedAppointments').textContent = data.filter(d => d['Appointment Status'] === 'Attended').length;
+            document.getElementById('newAppointments').textContent = data.filter(d => d['Appointment Status'] === 'New Appointment').length;
+            document.getElementById('missedAppointments').textContent = data.filter(d => d['Appointment Status'] === 'Cancelled' || d['Appointment Status'] === 'No Show').length;
+
+            // Prepare data for charts
+            const statusCounts = d3.rollup(data, v => v.length, d => d['Appointment Status']);
+            const typeCounts = d3.rollup(data, v => v.length, d => d['Appointment Type']);
+            const assigneeCounts = d3.rollup(data, v => v.length, d => d['Appointment Assigned To']);
+
+            // Convert Map to Array of Objects for D3
+            const statusChartData = Array.from(statusCounts, ([name, value]) => ({ name, value }));
+            const typeChartData = Array.from(typeCounts, ([name, value]) => ({ name, value }));
+            const assigneeChartData = Array.from(assigneeCounts, ([name, value]) => ({ name, value }));
+
+            // Render Charts
+            drawBarChart('#appointmentsByStatusChart', statusChartData, 'name', 'value', 'Appointments by Status');
+            drawPieChart('#appointmentsByTypeChart', typeChartData, 'name', 'value', 'Appointments by Type');
+            drawBarChart('#appointmentsByAssigneeChart', assigneeChartData, 'name', 'value', 'Appointments by Assignee');
+
+
+            // Update Appointments Table
+            const tableBody = document.getElementById('appointmentsTableBody');
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            data.forEach(appointment => {
+                const row = tableBody.insertRow();
+                row.className = 'whitespace-nowrap';
+                row.insertCell().className = 'px-6 py-4 text-sm font-medium text-gray-900';
+                row.cells[0].textContent = appointment['Unique ID'];
+                row.insertCell().className = 'px-6 py-4 text-sm text-gray-500';
+                row.cells[1].textContent = appointment['Seller Lead Name'];
+                row.insertCell().className = 'px-6 py-4 text-sm text-gray-500';
+                row.cells[2].textContent = appointment['Appointment Location'];
+                row.insertCell().className = 'px-6 py-4 text-sm text-gray-500';
+                row.cells[3].textContent = appointment['Appointment Assigned To'];
+                row.insertCell().className = 'px-6 py-4 text-sm text-gray-500';
+                row.cells[4].textContent = appointment['Appointment Date/Time'];
+                row.insertCell().className = 'px-6 py-4 text-sm text-gray-500';
+                row.cells[5].textContent = appointment['Appointment Status'];
+                row.insertCell().className = 'px-6 py-4 text-sm text-gray-500';
+                row.cells[6].textContent = appointment['Appointment Type'] || 'N/A'; // Handle missing type
+            });
+        }
+
+        /**
+         * Draws a bar chart using D3.js.
+         * @param {string} selector CSS selector for the chart container.
+         * @param {Array<Object>} data Data for the chart.
+         * @param {string} xAccessor Key for the x-axis values.
+         * @param {string} yAccessor Key for the y-axis values.
+         */
+        function drawBarChart(selector, data, xAccessor, yAccessor) {
+            d3.select(selector).select('svg').remove(); // Clear previous chart
+
+            const container = d3.select(selector);
+            const containerWidth = container.node().clientWidth;
+            const containerHeight = container.node().clientHeight;
+
+            const margin = { top: 20, right: 30, bottom: 60, left: 50 };
+            const width = containerWidth - margin.left - margin.right;
+            const height = containerHeight - margin.top - margin.bottom;
+
+            const svg = container.append('svg')
+                .attr('class', 'chart-svg')
+                .attr('viewBox', `0 0 ${containerWidth} ${containerHeight}`)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .domain(data.map(d => d[xAccessor]))
+                .range([0, width])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d[yAccessor])]).nice()
+                .range([height, 0]);
+
+            svg.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .attr('transform', 'rotate(-45)')
+                .style('text-anchor', 'end');
+
+            svg.append('g')
+                .call(d3.axisLeft(y));
+
+            svg.selectAll('.bar')
+                .data(data)
+                .enter().append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => x(d[xAccessor]))
+                .attr('y', d => y(d[yAccessor]))
+                .attr('width', x.bandwidth())
+                .attr('height', d => height - y(d[yAccessor]))
+                .attr('fill', '#4299e1'); // Tailwind blue-500
+        }
+
+        /**
+         * Draws a pie chart using D3.js.
+         * @param {string} selector CSS selector for the chart container.
+         * @param {Array<Object>} data Data for the chart.
+         * @param {string} labelAccessor Key for the label.
+         * @param {string} valueAccessor Key for the value.
+         */
+        function drawPieChart(selector, data, labelAccessor, valueAccessor) {
+            d3.select(selector).select('svg').remove(); // Clear previous chart
+
+            const container = d3.select(selector);
+            const containerWidth = container.node().clientWidth;
+            const containerHeight = container.node().clientHeight;
+
+            const radius = Math.min(containerWidth, containerHeight) / 2 - 20;
+
+            const svg = container.append('svg')
+                .attr('class', 'chart-svg')
+                .attr('viewBox', `0 0 ${containerWidth} ${containerHeight}`)
+                .append('g')
+                .attr('transform', `translate(${containerWidth / 2},${containerHeight / 2})`);
+
+            const pie = d3.pie()
+                .value(d => d[valueAccessor]);
+
+            const arc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(radius);
+
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            const arcs = svg.selectAll('arc')
+                .data(pie(data))
+                .enter()
+                .append('g')
+                .attr('class', 'arc');
+
+            arcs.append('path')
+                .attr('d', arc)
+                .attr('fill', d => color(d.data[labelAccessor]));
+
+            arcs.append('text')
+                .attr('transform', d => `translate(${arc.centroid(d)})`)
+                .attr('text-anchor', 'middle')
+                .text(d => `${d.data[labelAccessor]} (${d.data[valueAccessor]})`)
+                .style('font-size', '12px')
+                .style('fill', 'white');
+        }
+
+        /**
+         * Applies filters to the data and re-renders the dashboard.
+         */
+        function applyFilters() {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const assignedToFilter = document.getElementById('assignedToFilter').value;
+            const typeFilter = document.getElementById('typeFilter').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            filteredAppointments = appointmentsData.filter(d => {
+                const appointmentDate = new Date(d['Appointment Date/Time']);
+                const start = startDate ? new Date(startDate) : null;
+                const end = endDate ? new Date(endDate) : null;
+
+                // Filter by status
+                if (statusFilter && d['Appointment Status'] !== statusFilter) {
+                    return false;
+                }
+                // Filter by assigned to
+                if (assignedToFilter && d['Appointment Assigned To'] !== assignedToFilter) {
+                    return false;
+                }
+                // Filter by appointment type
+                if (typeFilter && (d['Appointment Type'] || 'N/A') !== typeFilter) {
+                    return false;
+                }
+                // Filter by date range
+                if (start && appointmentDate < start) {
+                    return false;
+                }
+                if (end && appointmentDate > end) {
+                    // Adjust end date to include the whole day
+                    const endOfDay = new Date(end);
+                    endOfDay.setHours(23, 59, 59, 999);
+                    if (appointmentDate > endOfDay) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            renderDashboard(filteredAppointments);
+        }
+
+        /**
+         * Populates filter dropdowns with unique values from the data.
+         */
+        function populateFilters() {
+            const statuses = [...new Set(appointmentsData.map(d => d['Appointment Status']))].sort();
+            const assignedTos = [...new Set(appointmentsData.map(d => d['Appointment Assigned To']))].sort();
+
+            const statusFilter = document.getElementById('statusFilter');
+            statuses.forEach(status => {
+                if (status) { // Avoid empty string status
+                    const option = document.createElement('option');
+                    option.value = status;
+                    option.textContent = status;
+                    statusFilter.appendChild(option);
+                }
+            });
+
+            const assignedToFilter = document.getElementById('assignedToFilter');
+            assignedTos.forEach(assignee => {
+                if (assignee) { // Avoid empty string assignee
+                    const option = document.createElement('option');
+                    option.value = assignee;
+                    option.textContent = assignee;
+                    assignedToFilter.appendChild(option);
+                }
+            });
+        }
+
+        /**
+         * Sets up event listeners for filter changes and reset button.
+         */
+        function setupFilterListeners() {
+            document.getElementById('statusFilter').addEventListener('change', applyFilters);
+            document.getElementById('assignedToFilter').addEventListener('change', applyFilters);
+            document.getElementById('typeFilter').addEventListener('change', applyFilters);
+            document.getElementById('startDate').addEventListener('change', applyFilters);
+            document.getElementById('endDate').addEventListener('change', applyFilters);
+            document.getElementById('resetFilters').addEventListener('click', () => {
+                document.getElementById('statusFilter').value = '';
+                document.getElementById('assignedToFilter').value = '';
+                document.getElementById('typeFilter').value = '';
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+                applyFilters(); // Re-apply filters to show all data
+            });
+        }
+
+        // Initialize the dashboard when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                appointmentsData = parseCSV(csvData);
+                populateFilters();
+                setupFilterListeners();
+                applyFilters(); // Initial render with all data
+            } catch (error) {
+                console.error("Error initializing dashboard:", error);
+                // Display a user-friendly error message on the page if needed
+                document.getElementById('appointmentsTableBody').innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error loading data. Please try again.</td></tr>`;
+            }
+        });
+
+        // Add a resize listener for charts to ensure responsiveness
+        window.addEventListener('resize', () => {
+            applyFilters(); // Re-render charts on resize to adjust to new dimensions
+        });
+
+    </script>
+</body>
+</html>
